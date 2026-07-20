@@ -62,9 +62,10 @@ exports.deleteUser = async (req, res, next) => {
 
 exports.signUp = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
-    const user = await User.create({ name, email, password });
+    const { name, email, password, role } = req.body;
+    const user = await User.create({ name, email, password, role });
     const token = generateToken(user._id);
+    user.password = undefined; // 👈 added: strip password before sending response
     res.status(201).json({ success: true, token, data: user });
   } catch (error) {
     next(error);
@@ -80,6 +81,7 @@ exports.login = async (req, res, next) => {
     if (!user || !(await user.matchPassword(password)))
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     const token = generateToken(user._id);
+    user.password = undefined; // 👈 added: strip password before sending response
     res.status(200).json({ success: true, token, data: user });
   } catch (error) {
     next(error);

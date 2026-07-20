@@ -22,10 +22,10 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     role: {
-      type: String,
-      enum: ['user', 'admin'],
-      default: 'user',
-    },
+  type: String,
+  enum: ['SuperAdmin', 'HospitalAdmin', 'Volunteer', 'Donor'],
+  default: 'Donor',
+},
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },
@@ -44,4 +44,4 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', userSchema); 
