@@ -1,5 +1,7 @@
 const VolunteerAssignment = require('../models/volunteerAssignmentModel');
 const User = require('../models/userModel');
+const Camp = require('../models/campModel');
+const { createNotification } = require('./notificationController');
 
 // Assign a volunteer to a camp
 exports.assignVolunteer = async (req, res, next) => {
@@ -16,6 +18,15 @@ exports.assignVolunteer = async (req, res, next) => {
       volunteer: volunteerId,
       responsibility,
       assignedBy: req.user.id,
+    });
+
+    // Notify the volunteer about their new assignment
+    const camp = await Camp.findById(req.params.id);
+    await createNotification({
+      userId: volunteerId,
+      type: 'Volunteer',
+      message: `You have been assigned as "${responsibility}" for the camp "${camp ? camp.name : 'a blood donation camp'}".`,
+      relatedId: req.params.id,
     });
 
     res.status(201).json({ success: true, data: assignment });

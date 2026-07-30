@@ -20,6 +20,10 @@ const campSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Venue is required'],
     },
+    location: {
+      lat: { type: Number },
+      lng: { type: Number },
+    },
     expectedDonors: {
       type: Number,
       default: 0,
@@ -57,6 +61,13 @@ const campSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
+    registeredDonors: [
+      {
+        donor: { type: mongoose.Schema.Types.ObjectId, ref: 'Donor' },
+        status: { type: String, enum: ['registered', 'attended', 'donated', 'no-show'], default: 'registered' },
+        registeredAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );

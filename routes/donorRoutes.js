@@ -10,6 +10,8 @@ const {
 } = require('../controllers/donorController');
 const { protect } = require('../middlewares/authMiddleware');
 const { authorizeRoles } = require('../middlewares/roleMiddleware');
+const auditLogger = require('../middlewares/auditMiddleware');
+router.use(auditLogger('Donors'));
 
 /**
  * @swagger

@@ -1,5 +1,7 @@
 const EmergencyRequest = require('../models/emergencyRequestModel');
 const Donor = require('../models/donorModel');
+const { calculateDistance } = require('../utils/geoUtils');
+const { createNotification } = require('./notificationController');
 
 // Submit an emergency blood request (any logged-in user - patient/hospital)
 exports.createEmergencyRequest = async (req, res, next) => {
@@ -8,6 +10,39 @@ exports.createEmergencyRequest = async (req, res, next) => {
       ...req.body,
       requestedBy: req.user.id,
     });
+
+    // Notify eligible donors matching this request's blood group
+    // Notify eligible donors matching this request's blood group, within 50km if location data exists
+    const eligibleDonors = await Donor.find({
+      bloodGroup: request.bloodGroup,
+      eligibilityStatus: 'Eligible',
+    });
+
+    const NOTIFICATION_RADIUS_KM = 50;
+
+    for (const donor of eligibleDonors) {
+      let withinRadius = true;
+
+      if (request.location?.lat && request.location?.lng && donor.location?.lat && donor.location?.lng) {
+        const distance = calculateDistance(
+          request.location.lat,
+          request.location.lng,
+          donor.location.lat,
+          donor.location.lng
+        );
+        withinRadius = distance !== null && distance <= NOTIFICATION_RADIUS_KM;
+      }
+
+      if (withinRadius) {
+        await createNotification({
+          userId: donor.user,
+          type: 'Emergency',
+          message: `Urgent: ${request.hospitalName} needs ${request.unitsRequired} unit(s) of ${request.bloodGroup} blood. Urgency: ${request.urgency}. Please contact if you can help.`,
+          relatedId: request._id,
+        });
+      }
+    }
+
     res.status(201).json({ success: true, data: request });
   } catch (error) {
     next(error);

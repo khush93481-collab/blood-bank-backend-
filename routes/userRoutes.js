@@ -15,6 +15,8 @@ const {
 } = require('../controllers/userController');
 const { protect } = require('../middlewares/authMiddleware');
 const { authorizeRoles } = require('../middlewares/roleMiddleware');
+const auditLogger = require('../middlewares/auditMiddleware');
+router.use(auditLogger('Users'));
 
 /**
  * @swagger

@@ -21,6 +21,10 @@ const emergencyRequestSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    location: {
+      lat: { type: Number },
+      lng: { type: Number },
+    },
     urgency: {
       type: String,
       enum: ['Low', 'Medium', 'High', 'Critical'],

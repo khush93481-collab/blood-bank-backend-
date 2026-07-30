@@ -12,6 +12,10 @@ const {
   activateCamp,
   completeCamp,
   cancelCamp,
+  sendCampReminders,
+  registerForCamp,
+  getCampRegisteredDonors,
+  updateDonorAttendance,
 } = require('../controllers/campController');
 const { protect } = require('../middlewares/authMiddleware');
 const { authorizeRoles } = require('../middlewares/roleMiddleware');
@@ -21,6 +25,15 @@ const {
   updateVolunteerAssignment,
   removeVolunteerAssignment,
 } = require('../controllers/volunteerAssignmentController');
+const auditLogger = require('../middlewares/auditMiddleware');
+router.use(auditLogger('Camps'));
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Camps
+ *     description: Blood donation camp lifecycle management
+ */
 
 /**
  * @swagger
@@ -128,10 +141,17 @@ router.delete('/:id/volunteers/:assignmentId', protect, authorizeRoles('Hospital
 
 /**
  * @swagger
- * tags:
- *   - name: Camps
- *     description: Blood donation camp lifecycle management
+ * /camps/send-reminders:
+ *   post:
+ *     summary: Send reminders for camps happening in the next 3 days (SuperAdmin)
+ *     tags: [Camps]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Reminders sent successfully
  */
+router.post('/send-reminders', protect, authorizeRoles('SuperAdmin'), sendCampReminders);
 
 /**
  * @swagger
@@ -449,5 +469,89 @@ router.put('/:id/complete', protect, authorizeRoles('HospitalAdmin', 'SuperAdmin
  *         description: Camp not found
  */
 router.put('/:id/cancel', protect, authorizeRoles('HospitalAdmin', 'SuperAdmin'), cancelCamp);
+
+/**
+ * @swagger
+ * /camps/{id}/register:
+ *   post:
+ *     summary: Register as a donor for a camp
+ *     tags: [Camps]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       201:
+ *         description: Registered for camp successfully
+ *       400:
+ *         description: Already registered or no donor profile
+ *       404:
+ *         description: Camp not found
+ */
+router.post('/:id/register', protect, registerForCamp);
+
+/**
+ * @swagger
+ * /camps/{id}/registered-donors:
+ *   get:
+ *     summary: View all donors registered for a camp (Admin/Organizer)
+ *     tags: [Camps]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of registered donors
+ *       404:
+ *         description: Camp not found
+ */
+router.get('/:id/registered-donors', protect, authorizeRoles('HospitalAdmin', 'SuperAdmin'), getCampRegisteredDonors);
+
+/**
+ * @swagger
+ * /camps/{id}/registered-donors/{donorId}/attendance:
+ *   put:
+ *     summary: Update a registered donor's attendance/donation status (Admin/Organizer)
+ *     tags: [Camps]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: donorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [registered, attended, donated, no-show]
+ *                 example: donated
+ *     responses:
+ *       200:
+ *         description: Attendance updated
+ *       404:
+ *         description: Camp or donor registration not found
+ */
+router.put('/:id/registered-donors/:donorId/attendance', protect, authorizeRoles('HospitalAdmin', 'SuperAdmin'), updateDonorAttendance);
 
 module.exports = router;
