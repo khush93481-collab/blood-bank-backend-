@@ -1,5 +1,7 @@
 const Camp = require('../models/campModel');
 const Donor = require('../models/donorModel');
+const CampRegistration = require('../models/campRegistrationModel');
+const Donation = require('../models/donationModel');
 const { calculateDistance } = require('../utils/geoUtils');
 const { createNotification } = require('./notificationController');
 
@@ -227,59 +229,79 @@ exports.sendCampReminders = async (req, res, next) => {
     next(error);
   }
 };
-// Donor registers themselves for a camp
 exports.registerForCamp = async (req, res, next) => {
   try {
-    const Donor = require('../models/donorModel');
     const donor = await Donor.findOne({ user: req.user.id });
     if (!donor) return res.status(400).json({ success: false, message: 'You must have a donor profile to register' });
 
     const camp = await Camp.findById(req.params.id);
     if (!camp) return res.status(404).json({ success: false, message: 'Camp not found' });
 
-    const alreadyRegistered = camp.registeredDonors.some((r) => r.donor.toString() === donor._id.toString());
-    if (alreadyRegistered) {
+    const registration = await CampRegistration.create({
+      camp: req.params.id,
+      donor: donor._id,
+    });
+
+    res.status(201).json({ success: true, message: 'Registered for camp successfully', data: registration });
+  } catch (error) {
+    if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'Already registered for this camp' });
     }
-
-    camp.registeredDonors.push({ donor: donor._id });
-    await camp.save();
-
-    res.status(201).json({ success: true, message: 'Registered for camp successfully' });
-  } catch (error) {
     next(error);
   }
 };
 
-// View registered donors for a camp (Admin/Organizer)
 exports.getCampRegisteredDonors = async (req, res, next) => {
   try {
-    const camp = await Camp.findById(req.params.id).populate({
-      path: 'registeredDonors.donor',
-      populate: { path: 'user', select: 'name email phone' },
-    });
-    if (!camp) return res.status(404).json({ success: false, message: 'Camp not found' });
-
-    res.status(200).json({ success: true, count: camp.registeredDonors.length, data: camp.registeredDonors });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Update a registered donor's attendance/donation status (Admin/Organizer)
-exports.updateDonorAttendance = async (req, res, next) => {
-  try {
-    const { status } = req.body; // 'attended', 'donated', 'no-show'
     const camp = await Camp.findById(req.params.id);
     if (!camp) return res.status(404).json({ success: false, message: 'Camp not found' });
 
-    const entry = camp.registeredDonors.find((r) => r.donor.toString() === req.params.donorId);
-    if (!entry) return res.status(404).json({ success: false, message: 'Donor registration not found for this camp' });
+    const registrations = await CampRegistration.find({ camp: req.params.id }).populate({
+      path: 'donor',
+      populate: { path: 'user', select: 'name email phone' },
+    });
 
-    entry.status = status;
-    await camp.save();
+    res.status(200).json({ success: true, count: registrations.length, data: registrations });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    res.status(200).json({ success: true, message: 'Attendance updated', data: entry });
+exports.updateDonorAttendance = async (req, res, next) => {
+  try {
+    const { status, units } = req.body;
+
+    const registration = await CampRegistration.findOne({
+      camp: req.params.id,
+      donor: req.params.donorId,
+    });
+
+    if (!registration) return res.status(404).json({ success: false, message: 'Donor registration not found for this camp' });
+
+    registration.status = status;
+    await registration.save();
+
+    // If marked as donated, create a permanent Donation record and update donor's history
+    if (status === 'donated') {
+      const donor = await Donor.findById(req.params.donorId);
+      if (donor) {
+        const donation = await Donation.create({
+          donor: donor._id,
+          camp: req.params.id,
+          campRegistration: registration._id,
+          bloodGroup: donor.bloodGroup,
+          units: units || 1,
+          recordedBy: req.user.id,
+        });
+
+        donor.donationHistory.push({ camp: req.params.id, date: new Date(), units: units || 1 });
+        donor.lastDonationDate = new Date();
+        donor.calculateEligibility();
+        await donor.save();
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Attendance updated', data: registration });
   } catch (error) {
     next(error);
   }

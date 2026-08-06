@@ -61,13 +61,7 @@ const campSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
-    registeredDonors: [
-      {
-        donor: { type: mongoose.Schema.Types.ObjectId, ref: 'Donor' },
-        status: { type: String, enum: ['registered', 'attended', 'donated', 'no-show'], default: 'registered' },
-        registeredAt: { type: Date, default: Date.now },
-      },
-    ],
+    
   },
   { timestamps: true }
 );

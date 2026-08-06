@@ -2,6 +2,7 @@ const Camp = require('../models/campModel');
 const Donor = require('../models/donorModel');
 const EmergencyRequest = require('../models/emergencyRequestModel');
 const VolunteerAssignment = require('../models/volunteerAssignmentModel');
+const Donation = require('../models/donationModel');
 
 // Main dashboard summary
 exports.getDashboardStats = async (req, res, next) => {
@@ -26,10 +27,8 @@ exports.getDashboardStats = async (req, res, next) => {
       EmergencyRequest.countDocuments({ status: 'Pending' }),
     ]);
 
-    const donationAgg = await Camp.aggregate([
-      { $unwind: '$registeredDonors' },
-      { $match: { 'registeredDonors.status': 'donated' } },
-      { $count: 'totalDonations' },
+    const donationAgg = await Donation.aggregate([
+      { $group: { _id: null, totalUnits: { $sum: '$units' } } },
     ]);
 
     res.status(200).json({
@@ -42,7 +41,7 @@ exports.getDashboardStats = async (req, res, next) => {
         totalDonors,
         activeDonors,
         emergencyRequestsCount,
-        totalDonations: donationAgg[0]?.totalDonations || 0,
+        totalDonations: donationAgg[0]?.totalUnits || 0,
       },
     });
   } catch (error) {
@@ -53,37 +52,30 @@ exports.getDashboardStats = async (req, res, next) => {
 // Camp Participation Statistics
 exports.getCampParticipationStats = async (req, res, next) => {
   try {
-    const data = await Camp.aggregate([
-      {
-        $project: {
-          name: 1,
-          dateTime: 1,
-          expectedDonors: 1,
-          registeredCount: { $size: { $ifNull: ['$registeredDonors', []] } },
-          donatedCount: {
-            $size: {
-              $filter: {
-                input: { $ifNull: ['$registeredDonors', []] },
-                as: 'd',
-                cond: { $eq: ['$$d.status', 'donated'] },
-              },
-            },
-          },
-        },
-      },
-      {
-        $addFields: {
-          participationRate: {
-            $cond: [
-              { $eq: ['$expectedDonors', 0] },
-              0,
-              { $multiply: [{ $divide: ['$registeredCount', '$expectedDonors'] }, 100] },
-            ],
-          },
-        },
-      },
-      { $sort: { dateTime: -1 } },
-    ]);
+    const CampRegistration = require('../models/campRegistrationModel');
+
+    const camps = await Camp.find().select('name dateTime expectedDonors');
+
+    const data = await Promise.all(
+      camps.map(async (camp) => {
+        const registeredCount = await CampRegistration.countDocuments({ camp: camp._id });
+        const donatedCount = await CampRegistration.countDocuments({ camp: camp._id, status: 'donated' });
+        const participationRate =
+          camp.expectedDonors === 0 ? 0 : (registeredCount / camp.expectedDonors) * 100;
+
+        return {
+          name: camp.name,
+          dateTime: camp.dateTime,
+          expectedDonors: camp.expectedDonors,
+          registeredCount,
+          donatedCount,
+          participationRate,
+        };
+      })
+    );
+
+    data.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -154,16 +146,15 @@ exports.getVolunteerAssignmentReport = async (req, res, next) => {
 // Monthly Donation Report
 exports.getMonthlyDonationReport = async (req, res, next) => {
   try {
-    const monthlyReport = await Camp.aggregate([
-      { $unwind: '$registeredDonors' },
-      { $match: { 'registeredDonors.status': 'donated' } },
+    const monthlyReport = await Donation.aggregate([
       {
         $group: {
           _id: {
-            year: { $year: '$registeredDonors.registeredAt' },
-            month: { $month: '$registeredDonors.registeredAt' },
+            year: { $year: '$donationDate' },
+            month: { $month: '$donationDate' },
           },
-          totalDonations: { $sum: 1 },
+          totalUnits: { $sum: '$units' },
+          donationCount: { $sum: 1 },
         },
       },
       { $sort: { '_id.year': -1, '_id.month': -1 } },

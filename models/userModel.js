@@ -21,10 +21,10 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
-    role: {
+   role: {
   type: String,
-  enum: ['SuperAdmin', 'HospitalAdmin', 'Volunteer', 'Donor'],
-  default: 'Donor',
+  enum: ['SuperAdmin', 'HospitalAdmin', 'Volunteer'],
+  default: 'Volunteer',
 },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
